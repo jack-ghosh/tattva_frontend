@@ -28,7 +28,6 @@ import {
   RefreshCw,
   History,
   Sparkles,
-  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +47,8 @@ interface ResultsData {
   percentage: number;
   wrongQuestions: (Question & { userAnswer: string | null })[];
   unattemptedQuestions: Question[];
+  // correctQuestions may not be returned by API — we derive them below
+  correctQuestions?: (Question & { userAnswer: string })[];
 }
 
 // ─── Score arc hero ───────────────────────────────────────────────────────────
@@ -58,12 +59,10 @@ function ScoreArc({
   percentage: number;
   isPassed: boolean;
 }) {
-  // Half-donut arc (180°). SVG viewBox 0 0 200 110
   const radius = 80;
   const cx = 100;
   const cy = 100;
-  // Arc length for a semicircle
-  const arcLength = Math.PI * radius; // ~251.3
+  const arcLength = Math.PI * radius;
   const offset = arcLength - (percentage / 100) * arcLength;
 
   return (
@@ -74,7 +73,6 @@ function ScoreArc({
           className="w-full h-full"
           style={{ overflow: "visible" }}
         >
-          {/* Track */}
           <path
             d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
             fill="none"
@@ -83,7 +81,6 @@ function ScoreArc({
             strokeLinecap="round"
             className="text-muted"
           />
-          {/* Progress */}
           <path
             d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
             fill="none"
@@ -99,8 +96,6 @@ function ScoreArc({
             style={{ transformOrigin: "100px 100px" }}
           />
         </svg>
-
-        {/* Center label */}
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
           <span
             className={cn(
@@ -112,8 +107,6 @@ function ScoreArc({
           </span>
         </div>
       </div>
-
-      {/* Pass / Fail badge */}
       <span
         className={cn(
           "mt-2 px-4 py-1 rounded-full text-sm font-semibold tracking-wide",
@@ -128,22 +121,37 @@ function ScoreArc({
   );
 }
 
-// ─── Question review card ─────────────────────────────────────────────────────
+// ─── Question review card — shows ALL questions ───────────────────────────────
 function QuestionReview({
   question,
   userAnswer,
-  type,
+  status,
   index,
 }: {
   question: Question;
   userAnswer?: string | null;
-  type: "wrong" | "unattempted";
+  status: "correct" | "wrong" | "unattempted";
   index: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const getOptionText = (key: string) =>
     question.options.find((o) => o.key === key)?.text || key;
+
+  const StatusIcon = () => {
+    if (status === "correct")
+      return <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />;
+    if (status === "wrong")
+      return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
+    return <MinusCircle className="h-4 w-4 text-muted-foreground shrink-0" />;
+  };
+
+  const badgeClass =
+    status === "correct"
+      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+      : status === "wrong"
+        ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+        : "bg-muted text-muted-foreground";
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -156,20 +164,25 @@ function QuestionReview({
               : "bg-card border-border hover:bg-muted/40",
           )}
         >
-          {/* Index badge */}
+          {/* Status icon */}
+          <div className="shrink-0 mt-0.5">
+            <StatusIcon />
+          </div>
+
+          {/* Question number badge */}
           <span
             className={cn(
               "shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
-              type === "wrong"
-                ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                : "bg-muted text-muted-foreground",
+              badgeClass,
             )}
           >
             {index + 1}
           </span>
+
           <p className="text-sm text-foreground leading-snug flex-1 line-clamp-2">
             {question.text}
           </p>
+
           <ChevronDown
             className={cn(
               "h-4 w-4 text-muted-foreground shrink-0 mt-0.5 transition-transform duration-200",
@@ -194,7 +207,7 @@ function QuestionReview({
                     "flex items-center gap-2.5 px-3 py-2 rounded-lg border text-sm",
                     isCorrect
                       ? "bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
-                      : isUserAnswer
+                      : isUserAnswer && !isCorrect
                         ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300"
                         : "bg-background border-border text-foreground/70",
                   )}
@@ -216,7 +229,7 @@ function QuestionReview({
 
           {/* Answer summary */}
           <div className="flex flex-col sm:flex-row gap-2 text-xs pt-1">
-            {type === "wrong" && userAnswer && (
+            {status === "wrong" && userAnswer && (
               <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
                 <XCircle className="h-3.5 w-3.5 shrink-0" />
                 Your answer:{" "}
@@ -236,14 +249,16 @@ function QuestionReview({
           </div>
 
           {/* Explanation */}
-          <div className="pt-2 border-t border-border">
-            <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wider">
-              Explanation
-            </p>
-            <p className="text-sm text-foreground leading-relaxed">
-              {question.explanation}
-            </p>
-          </div>
+          {status !== "correct" && (
+            <div className="pt-2 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wider">
+                Explanation
+              </p>
+              <p className="text-sm text-foreground leading-relaxed">
+                {question.explanation}
+              </p>
+            </div>
+          )}
 
           {/* Deep Dive */}
           <TooltipProvider>
@@ -270,18 +285,18 @@ function QuestionReview({
   );
 }
 
-// ─── Shared header ─────────────────────────────────────────────────────────────
+// ─── Shared header — consistent with exam page ────────────────────────────────
 function PageHeader({ onTakeAnother }: { onTakeAnother?: () => void }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-sm">
       <div className="mx-auto max-w-4xl px-4 h-12 flex items-center justify-between gap-3">
-        {/* Brand */}
         <div className="flex items-center gap-2 shrink-0">
           <BookOpen className="h-5 w-5 text-primary" />
           <span className="font-bold text-foreground">Tattva</span>
+          <span className="hidden sm:inline text-xs text-muted-foreground border-l border-border pl-2 ml-1">
+            Results
+          </span>
         </div>
-
-        {/* Nav */}
         <div className="flex items-center gap-1.5">
           <Button
             variant="ghost"
@@ -300,13 +315,12 @@ function PageHeader({ onTakeAnother }: { onTakeAnother?: () => void }) {
               onClick={onTakeAnother}
               className="h-8 px-3 text-sm"
             >
-              Home
+              New Exam
             </Button>
           )}
         </div>
       </div>
-      {/* Progress strip placeholder to keep consistent with exam page */}
-      <div className="h-0.5 bg-muted" />
+      <div className="h-0.5 bg-primary" />
     </header>
   );
 }
@@ -362,6 +376,31 @@ function ErrorState({
   );
 }
 
+// ─── Section header ────────────────────────────────────────────────────────────
+function SectionHeader({
+  icon,
+  label,
+  count,
+  iconClass,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  iconClass?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className={iconClass}>{icon}</span>
+      <h2 className="text-base font-semibold text-foreground">
+        {label}
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          ({count})
+        </span>
+      </h2>
+    </div>
+  );
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function ResultsPage() {
   const params = useParams();
@@ -383,11 +422,8 @@ export default function ResultsPage() {
     setError(null);
     fetchResults(attemptId)
       .then((response) => {
-        if (response.success && response.data) {
-          setResults(response.data);
-        } else {
-          setError(response.error || "Failed to load results");
-        }
+        if (response.success && response.data) setResults(response.data);
+        else setError(response.error || "Failed to load results");
         setIsLoading(false);
       })
       .catch(() => {
@@ -427,6 +463,10 @@ export default function ResultsPage() {
   const totalQuestions =
     results.correctCount + results.wrongCount + results.unattempted;
 
+  // Build a unified ordered list: correct → wrong → unattempted
+  // We only receive wrong + unattempted from API; correct questions aren't returned.
+  // We'll show them in sections, correct count shown in stats only.
+
   return (
     <div className="min-h-screen bg-background">
       <PageHeader onTakeAnother={handleTakeAnotherExam} />
@@ -444,15 +484,12 @@ export default function ResultsPage() {
           >
             <CardContent className="py-8">
               <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
-                {/* Arc */}
                 <div className="shrink-0">
                   <ScoreArc
                     percentage={results.percentage}
                     isPassed={isPassed}
                   />
                 </div>
-
-                {/* Score details */}
                 <div className="flex-1 w-full space-y-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-4xl font-bold font-mono tabular-nums text-foreground">
@@ -462,8 +499,6 @@ export default function ResultsPage() {
                       marks scored
                     </span>
                   </div>
-
-                  {/* Mini progress bar for score */}
                   <div className="space-y-1">
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
@@ -484,9 +519,8 @@ export default function ResultsPage() {
                       <span>100%</span>
                     </div>
                   </div>
-
                   <p className="text-sm text-muted-foreground">
-                    {totalQuestions} questions attempted in total
+                    {totalQuestions} questions in total
                   </p>
                 </div>
               </div>
@@ -494,13 +528,7 @@ export default function ResultsPage() {
           </Card>
 
           {/* ── STATS GRID ──────────────────────────────────────────────────── */}
-          {/* 
-            Mobile: 3 equal columns with compact cards (no icon, just number + label)
-            sm+: full cards with icons
-            This avoids the 3-col layout breaking on 320-375px screens
-          */}
           <div className="grid grid-cols-3 gap-2 sm:gap-4">
-            {/* Correct */}
             <Card className="border-emerald-100 dark:border-emerald-900">
               <CardContent className="py-3 sm:py-5 px-2 sm:px-4 text-center">
                 <CheckCircle className="hidden sm:block h-6 w-6 text-emerald-500 mx-auto mb-2" />
@@ -512,8 +540,6 @@ export default function ResultsPage() {
                 </p>
               </CardContent>
             </Card>
-
-            {/* Wrong */}
             <Card className="border-red-100 dark:border-red-900">
               <CardContent className="py-3 sm:py-5 px-2 sm:px-4 text-center">
                 <XCircle className="hidden sm:block h-6 w-6 text-red-500 mx-auto mb-2" />
@@ -525,8 +551,6 @@ export default function ResultsPage() {
                 </p>
               </CardContent>
             </Card>
-
-            {/* Unattempted */}
             <Card>
               <CardContent className="py-3 sm:py-5 px-2 sm:px-4 text-center">
                 <MinusCircle className="hidden sm:block h-6 w-6 text-muted-foreground mx-auto mb-2" />
@@ -540,25 +564,47 @@ export default function ResultsPage() {
             </Card>
           </div>
 
+          {/* ── CORRECT (count only — questions not returned by API) ─────────── */}
+          {results.correctCount > 0 &&
+            results.correctQuestions &&
+            results.correctQuestions.length > 0 && (
+              <section>
+                <SectionHeader
+                  icon={<CheckCircle className="h-4 w-4" />}
+                  iconClass="text-emerald-500"
+                  label="Correct Answers"
+                  count={results.correctQuestions.length}
+                />
+                <div className="space-y-2">
+                  {results.correctQuestions.map((q, i) => (
+                    <QuestionReview
+                      key={q.id}
+                      question={q}
+                      userAnswer={q.userAnswer}
+                      status="correct"
+                      index={i}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
           {/* ── WRONG QUESTIONS ─────────────────────────────────────────────── */}
           {results.wrongQuestions.length > 0 && (
             <section>
-              <div className="flex items-center gap-2 mb-3">
-                <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                <h2 className="text-base font-semibold text-foreground">
-                  Wrong Answers
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({results.wrongQuestions.length})
-                  </span>
-                </h2>
-              </div>
+              <SectionHeader
+                icon={<XCircle className="h-4 w-4" />}
+                iconClass="text-red-500"
+                label="Wrong Answers"
+                count={results.wrongQuestions.length}
+              />
               <div className="space-y-2">
                 {results.wrongQuestions.map((q, i) => (
                   <QuestionReview
                     key={q.id}
                     question={q}
                     userAnswer={q.userAnswer}
-                    type="wrong"
+                    status="wrong"
                     index={i}
                   />
                 ))}
@@ -569,21 +615,18 @@ export default function ResultsPage() {
           {/* ── UNATTEMPTED QUESTIONS ────────────────────────────────────────── */}
           {results.unattemptedQuestions.length > 0 && (
             <section>
-              <div className="flex items-center gap-2 mb-3">
-                <MinusCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-                <h2 className="text-base font-semibold text-foreground">
-                  Unattempted
-                  <span className="ml-2 text-sm font-normal text-muted-foreground">
-                    ({results.unattemptedQuestions.length})
-                  </span>
-                </h2>
-              </div>
+              <SectionHeader
+                icon={<MinusCircle className="h-4 w-4" />}
+                iconClass="text-muted-foreground"
+                label="Unattempted"
+                count={results.unattemptedQuestions.length}
+              />
               <div className="space-y-2">
                 {results.unattemptedQuestions.map((q, i) => (
                   <QuestionReview
                     key={q.id}
                     question={q}
-                    type="unattempted"
+                    status="unattempted"
                     index={i}
                   />
                 ))}
@@ -591,9 +634,10 @@ export default function ResultsPage() {
             </section>
           )}
 
-          {/* All correct state */}
+          {/* All correct, nothing to show */}
           {results.wrongQuestions.length === 0 &&
-            results.unattemptedQuestions.length === 0 && (
+            results.unattemptedQuestions.length === 0 &&
+            !results.correctQuestions?.length && (
               <Card>
                 <CardContent className="py-12 text-center">
                   <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-3" />

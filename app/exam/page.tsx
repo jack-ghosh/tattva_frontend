@@ -44,7 +44,6 @@ function HeaderTimer({
   const secs = seconds % 60;
   const pct = totalSeconds > 0 ? (seconds / totalSeconds) * 100 : 0;
 
-  // Thin arc SVG — 36x36
   const r = 14;
   const circ = 2 * Math.PI * r;
 
@@ -57,7 +56,6 @@ function HeaderTimer({
           : "border-border bg-card text-foreground",
       )}
     >
-      {/* mini arc */}
       <svg
         className="-rotate-90 shrink-0"
         width="20"
@@ -119,7 +117,6 @@ function PaletteDrawer({
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className={cn(
           "fixed inset-0 z-40 bg-black/40 transition-opacity duration-300",
@@ -129,8 +126,6 @@ function PaletteDrawer({
         )}
         onClick={onClose}
       />
-
-      {/* Drawer */}
       <aside
         className={cn(
           "fixed top-0 right-0 z-50 h-full w-72 max-w-[85vw] bg-card border-l border-border shadow-2xl flex flex-col",
@@ -138,7 +133,6 @@ function PaletteDrawer({
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
-        {/* Drawer header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <span className="font-semibold text-foreground text-sm">
             Question Palette
@@ -151,7 +145,6 @@ function PaletteDrawer({
           </button>
         </div>
 
-        {/* Legend */}
         <div className="px-4 py-3 border-b border-border shrink-0">
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="flex items-center gap-1.5">
@@ -179,14 +172,12 @@ function PaletteDrawer({
           </div>
         </div>
 
-        {/* Grid */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="grid grid-cols-5 gap-2">
             {examQuestions.map((q, index) => {
               const isAnswered = !!currentAnswers[q.id];
               const isFlagged = flaggedQuestions.has(q.id);
               const isCurrent = index === currentQuestionIndex;
-
               return (
                 <button
                   key={q.id}
@@ -218,8 +209,14 @@ function PaletteDrawer({
   );
 }
 
-// ─── Pre-exam countdown ───────────────────────────────────────────────────────
-function PreExamCountdown({ onComplete }: { onComplete: () => void }) {
+// ─── Pre-exam countdown — with Cancel button ──────────────────────────────────
+function PreExamCountdown({
+  onComplete,
+  onCancel,
+}: {
+  onComplete: () => void;
+  onCancel: () => void;
+}) {
   const [countdown, setCountdown] = useState(10);
 
   useEffect(() => {
@@ -266,9 +263,14 @@ function PreExamCountdown({ onComplete }: { onComplete: () => void }) {
             ))}
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            Exam begins automatically
-          </p>
+          {/* Cancel button */}
+          <button
+            onClick={onCancel}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+          >
+            <X className="h-4 w-4" />
+            Cancel Exam
+          </button>
         </CardContent>
       </Card>
     </div>
@@ -382,6 +384,12 @@ export default function ExamPage() {
 
   const handleStartExam = useCallback(() => startExam(), [startExam]);
 
+  // Cancel during countdown — clear and go back to preview
+  const handleCancelExam = useCallback(() => {
+    clearCurrentExam();
+    router.push("/preview");
+  }, [clearCurrentExam, router]);
+
   // Auto-submit on timeout
   useEffect(() => {
     if (
@@ -427,6 +435,20 @@ export default function ExamPage() {
     [examQuestions],
   );
 
+  // FIX #2: toggle answer — clicking selected option deselects it
+  const handleOptionClick = useCallback(
+    (questionId: string, optionKey: string) => {
+      const currentAnswer = currentAnswers[questionId];
+      if (currentAnswer === optionKey) {
+        // deselect: set to empty string or remove — store clears on empty
+        setAnswer(questionId, "");
+      } else {
+        setAnswer(questionId, optionKey);
+      }
+    },
+    [currentAnswers, setAnswer],
+  );
+
   if (!_hasHydrated) return null;
   if (!isLoggedIn || !examQuestions) {
     return (
@@ -435,15 +457,23 @@ export default function ExamPage() {
       </div>
     );
   }
-  if (!isExamActive) return <PreExamCountdown onComplete={handleStartExam} />;
+
+  // FIX #1: pass onCancel to countdown
+  if (!isExamActive)
+    return (
+      <PreExamCountdown
+        onComplete={handleStartExam}
+        onCancel={handleCancelExam}
+      />
+    );
 
   const currentQuestion = examQuestions[currentQuestionIndex];
-  const answeredCount = Object.keys(currentAnswers).length;
+  const answeredCount = Object.keys(currentAnswers).filter(
+    (k) => currentAnswers[k] !== "",
+  ).length;
   const unansweredCount = examQuestions.length - answeredCount;
   const isWarningTime = timeRemaining < 300;
   const isFlagged = flaggedQuestions.has(currentQuestion.id);
-
-  // Palette button indicator counts
   const indicatorCount = answeredCount + flaggedQuestions.size;
 
   return (
@@ -451,7 +481,6 @@ export default function ExamPage() {
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-4 h-12 flex items-center justify-between gap-3">
-          {/* Brand */}
           <div className="flex items-center gap-2 shrink-0">
             <BookOpen className="h-5 w-5 text-primary" />
             <span className="font-bold text-foreground">Tattva</span>
@@ -460,22 +489,18 @@ export default function ExamPage() {
             </span>
           </div>
 
-          {/* Right side: timer + palette toggle */}
           <div className="flex items-center gap-2">
             <HeaderTimer
               seconds={timeRemaining}
               totalSeconds={(durationMinutes || 0) * 60}
               isWarning={isWarningTime}
             />
-
-            {/* Palette toggle button */}
             <button
               onClick={() => setShowPalette(true)}
               className="relative p-2 rounded-md hover:bg-muted transition-colors"
               aria-label="Open question palette"
             >
               <Menu className="h-5 w-5 text-foreground" />
-              {/* indicator dot */}
               {indicatorCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
               )}
@@ -483,7 +508,6 @@ export default function ExamPage() {
           </div>
         </div>
 
-        {/* Progress strip under header — replaces old progress bar */}
         <div className="h-0.5 bg-muted">
           <div
             className="h-full bg-primary transition-all duration-500"
@@ -508,7 +532,6 @@ export default function ExamPage() {
       {/* ── MAIN CONTENT ────────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto pb-28">
         <div className="mx-auto max-w-2xl lg:max-w-3xl px-4 lg:px-8 py-5 lg:py-10">
-          {/* Question meta row */}
           <div className="flex items-center justify-between mb-4 lg:mb-7">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
               Question {currentQuestionIndex + 1}{" "}
@@ -523,21 +546,23 @@ export default function ExamPage() {
             )}
           </div>
 
-          {/* Question text */}
           <p className="text-base sm:text-lg lg:text-xl text-foreground leading-relaxed mb-6 lg:mb-9 font-medium">
             {currentQuestion.text}
           </p>
 
-          {/* Options — compact rows */}
+          {/* FIX #2: options — clicking selected deselects */}
           <div className="space-y-2 lg:space-y-3">
             {currentQuestion.options.map((option) => {
               const isSelected =
-                currentAnswers[currentQuestion.id] === option.key;
+                currentAnswers[currentQuestion.id] === option.key &&
+                currentAnswers[currentQuestion.id] !== "";
 
               return (
                 <button
                   key={option.key}
-                  onClick={() => setAnswer(currentQuestion.id, option.key)}
+                  onClick={() =>
+                    handleOptionClick(currentQuestion.id, option.key)
+                  }
                   className={cn(
                     "w-full flex items-center gap-3 lg:gap-4 px-3 lg:px-5 py-2.5 lg:py-4 rounded-lg border text-left transition-all group",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
@@ -546,7 +571,6 @@ export default function ExamPage() {
                       : "border-border hover:border-primary/40 hover:bg-muted/40",
                   )}
                 >
-                  {/* Letter badge */}
                   <span
                     className={cn(
                       "w-7 h-7 lg:w-9 lg:h-9 rounded-md flex items-center justify-center text-xs lg:text-sm font-bold shrink-0 transition-colors",
@@ -561,7 +585,6 @@ export default function ExamPage() {
                       option.key.toUpperCase()
                     )}
                   </span>
-
                   <span
                     className={cn(
                       "text-sm lg:text-base leading-snug",
@@ -576,13 +599,20 @@ export default function ExamPage() {
               );
             })}
           </div>
+
+          {/* Deselect hint */}
+          {currentAnswers[currentQuestion.id] &&
+            currentAnswers[currentQuestion.id] !== "" && (
+              <p className="mt-3 text-xs text-muted-foreground text-center">
+                Tap the selected option again to deselect
+              </p>
+            )}
         </div>
       </main>
 
       {/* ── FIXED BOTTOM NAV BAR ─────────────────────────────────────────────── */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-card/95 backdrop-blur-sm border-t border-border">
         <div className="mx-auto max-w-2xl lg:max-w-3xl px-4 lg:px-8 py-2.5 lg:py-4 flex items-center justify-between gap-2">
-          {/* Previous */}
           <button
             onClick={() => navigateTo(currentQuestionIndex - 1)}
             disabled={currentQuestionIndex === 0}
@@ -597,9 +627,7 @@ export default function ExamPage() {
             <span className="hidden sm:inline">Prev</span>
           </button>
 
-          {/* Center: Flag + Submit */}
           <div className="flex items-center gap-2 lg:gap-3">
-            {/* Flag / Review button */}
             <button
               onClick={() => toggleFlag(currentQuestion.id)}
               className={cn(
@@ -615,7 +643,6 @@ export default function ExamPage() {
               </span>
             </button>
 
-            {/* Submit */}
             <button
               onClick={() => setShowConfirmDialog(true)}
               disabled={isSubmitting}
@@ -629,7 +656,6 @@ export default function ExamPage() {
             </button>
           </div>
 
-          {/* Next */}
           <button
             onClick={() => navigateTo(currentQuestionIndex + 1)}
             disabled={currentQuestionIndex === examQuestions.length - 1}

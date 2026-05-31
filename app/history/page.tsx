@@ -8,14 +8,6 @@ import { fetchAttempts } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   BookOpen,
@@ -24,7 +16,12 @@ import {
   Target,
   BarChart3,
   Eye,
+  CheckCircle,
+  XCircle,
+  MinusCircle,
+  ArrowRight,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Attempt {
   id: string;
@@ -45,41 +42,30 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (_hasHydrated && !isLoggedIn) {
-      router.push("/login");
-    }
+    if (_hasHydrated && !isLoggedIn) router.push("/login");
   }, [isLoggedIn, _hasHydrated, router]);
 
   useEffect(() => {
     async function loadAttempts() {
       if (!userId) return;
-
       setIsLoading(true);
       setError(null);
-
       try {
         const response = await fetchAttempts(userId);
-        if (response.success && response.data) {
-          setAttempts(response.data);
-        } else {
-          setError(response.error || "Failed to load history");
-        }
+        if (response.success && response.data) setAttempts(response.data);
+        else setError(response.error || "Failed to load history");
       } catch {
         setError("Something went wrong. Please try again.");
       } finally {
         setIsLoading(false);
       }
     }
-
     loadAttempts();
   }, [userId]);
 
   if (!_hasHydrated) return null;
-  if (!isLoggedIn) {
-    return null;
-  }
+  if (!isLoggedIn) return null;
 
-  // Calculate summary stats
   const totalAttempts = attempts.length;
   const avgScore =
     totalAttempts > 0
@@ -92,116 +78,94 @@ export default function HistoryPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border sticky top-0 z-10 bg-background">
-        <div className="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <BookOpen className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">Tattva</span>
-          </Link>
-          <Button asChild>
-            <Link href="/preview">Home</Link>
+      {/* Header — consistent with exam/results pages */}
+      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-sm">
+        <div className="mx-auto max-w-4xl px-4 h-12 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 shrink-0">
+            <BookOpen className="h-5 w-5 text-primary" />
+            <span className="font-bold text-foreground">Tattva</span>
+            <span className="hidden sm:inline text-xs text-muted-foreground border-l border-border pl-2 ml-1">
+              History
+            </span>
+          </div>
+          <Button size="sm" asChild className="h-8 px-3 text-sm">
+            <Link href="/preview">New Exam</Link>
           </Button>
         </div>
+        <div className="h-0.5 bg-muted" />
       </header>
 
-      <main className="py-12 px-4">
-        <div className="mx-auto max-w-6xl space-y-8">
+      <main className="py-8 px-4 pb-16">
+        <div className="mx-auto max-w-4xl space-y-6">
+          {/* Page title */}
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Exam History
-            </h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl font-bold text-foreground">Exam History</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               Track your progress over time
             </p>
           </div>
 
-          {/* Summary Cards */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Total Attempts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <p className="text-3xl font-bold text-foreground">
-                    {totalAttempts}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Avg Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <p className="text-3xl font-bold text-foreground">
-                    {avgScore.toFixed(1)}%
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Award className="h-4 w-4" />
-                  Best Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <p className="text-3xl font-bold text-foreground">
-                    {bestScore.toFixed(1)}%
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Pass Rate
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-16" />
-                ) : (
-                  <p className="text-3xl font-bold text-foreground">
-                    {passRate.toFixed(1)}%
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+          {/* Summary stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              {
+                icon: <BarChart3 className="h-4 w-4" />,
+                label: "Total Attempts",
+                value: isLoading ? null : totalAttempts,
+                unit: "",
+              },
+              {
+                icon: <TrendingUp className="h-4 w-4" />,
+                label: "Avg Score",
+                value: isLoading ? null : avgScore.toFixed(1),
+                unit: "%",
+              },
+              {
+                icon: <Award className="h-4 w-4" />,
+                label: "Best Score",
+                value: isLoading ? null : bestScore.toFixed(1),
+                unit: "%",
+              },
+              {
+                icon: <Target className="h-4 w-4" />,
+                label: "Pass Rate",
+                value: isLoading ? null : passRate.toFixed(1),
+                unit: "%",
+              },
+            ].map((stat) => (
+              <Card key={stat.label}>
+                <CardHeader className="pb-1 pt-4 px-4">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    {stat.icon}
+                    {stat.label}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pb-4 px-4">
+                  {stat.value === null ? (
+                    <Skeleton className="h-8 w-16" />
+                  ) : (
+                    <p className="text-2xl font-bold text-foreground tabular-nums">
+                      {stat.value}
+                      {stat.unit}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
-          {/* Attempts Table */}
+          {/* Attempts list */}
           <Card>
             <CardContent className="pt-6">
               {isLoading ? (
-                <div className="space-y-4">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                  ))}
                 </div>
               ) : error ? (
                 <div className="text-center py-8">
-                  <p className="text-destructive">{error}</p>
+                  <p className="text-destructive text-sm">{error}</p>
                 </div>
               ) : attempts.length === 0 ? (
                 <div className="text-center py-12">
@@ -209,7 +173,7 @@ export default function HistoryPage() {
                   <h3 className="text-lg font-semibold text-foreground mb-2">
                     No Exams Yet
                   </h3>
-                  <p className="text-muted-foreground mb-4">
+                  <p className="text-sm text-muted-foreground mb-4">
                     Start your first exam to see your history here
                   </p>
                   <Button asChild>
@@ -217,25 +181,46 @@ export default function HistoryPage() {
                   </Button>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Score</TableHead>
-                      <TableHead className="text-right">Correct</TableHead>
-                      <TableHead className="text-right">Wrong</TableHead>
-                      <TableHead className="text-right">Skipped</TableHead>
-                      <TableHead className="text-right">%</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attempts.map((attempt) => {
-                      const isPassed = attempt.percentage >= 40;
-                      return (
-                        <TableRow key={attempt.id}>
-                          <TableCell>
+                <div className="space-y-3">
+                  {attempts.map((attempt) => {
+                    const isPassed = attempt.percentage >= 40;
+                    return (
+                      // FIX #6: entire row is clickable, View Results is prominent CTA
+                      <Link
+                        key={attempt.id}
+                        href={`/results/${attempt.id}`}
+                        className={cn(
+                          "group flex items-center gap-3 sm:gap-4 px-4 py-3.5 rounded-xl border transition-all",
+                          "hover:bg-muted/50 hover:border-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                          isPassed
+                            ? "border-emerald-100 dark:border-emerald-900/60"
+                            : "border-red-100 dark:border-red-900/60",
+                        )}
+                      >
+                        {/* Pass/Fail indicator */}
+                        <div
+                          className={cn(
+                            "shrink-0 w-10 h-10 rounded-full flex items-center justify-center",
+                            isPassed
+                              ? "bg-emerald-100 dark:bg-emerald-950"
+                              : "bg-red-100 dark:bg-red-950",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "text-xs font-bold",
+                              isPassed
+                                ? "text-emerald-700 dark:text-emerald-400"
+                                : "text-red-600 dark:text-red-400",
+                            )}
+                          >
+                            {attempt.percentage.toFixed(0)}%
+                          </span>
+                        </div>
+
+                        {/* Date + score */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
                             {new Date(attempt.date).toLocaleDateString(
                               "en-IN",
                               {
@@ -244,47 +229,51 @@ export default function HistoryPage() {
                                 year: "numeric",
                               },
                             )}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {attempt.score.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-green-600">
-                            {attempt.correctCount}
-                          </TableCell>
-                          <TableCell className="text-right text-red-600">
-                            {attempt.wrongCount}
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {attempt.unattempted}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {attempt.percentage.toFixed(1)}%
-                          </TableCell>
-                          <TableCell className="text-center">
                             <Badge
-                              variant={isPassed ? "default" : "destructive"}
-                              className={
+                              className={cn(
+                                "ml-2 text-xs px-1.5 py-0",
                                 isPassed
-                                  ? "bg-green-500 hover:bg-green-600"
-                                  : ""
-                              }
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 hover:bg-emerald-100"
+                                  : "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400 hover:bg-red-100",
+                              )}
                             >
                               {isPassed ? "Pass" : "Fail"}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/results/${attempt.id}`}>
-                                <Eye className="h-4 w-4" />
-                                <span className="sr-only">View</span>
-                              </Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Score:{" "}
+                            <span className="font-medium text-foreground">
+                              {attempt.score.toFixed(2)}
+                            </span>
+                          </p>
+                        </div>
+
+                        {/* Mini stat chips */}
+                        <div className="hidden sm:flex items-center gap-2 text-xs shrink-0">
+                          <span className="flex items-center gap-1 text-emerald-600">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            {attempt.correctCount}
+                          </span>
+                          <span className="flex items-center gap-1 text-red-500">
+                            <XCircle className="h-3.5 w-3.5" />
+                            {attempt.wrongCount}
+                          </span>
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <MinusCircle className="h-3.5 w-3.5" />
+                            {attempt.unattempted}
+                          </span>
+                        </div>
+
+                        {/* View Results CTA — prominent, always visible */}
+                        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold group-hover:bg-primary/90 transition-colors">
+                          <Eye className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">View Results</span>
+                          <ArrowRight className="h-3.5 w-3.5 sm:hidden" />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>
